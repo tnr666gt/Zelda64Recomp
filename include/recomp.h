@@ -5,7 +5,11 @@
 #include <math.h>
 #include <assert.h>
 #include <setjmp.h>
+#include <stdlib.h>
+
+#ifdef HAVE_MALLOC_H
 #include <malloc.h>
+#endif
 
 #if 0 // treat GPRs as 32-bit, should be better codegen
 typedef uint32_t gpr;

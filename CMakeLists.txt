@@ -37,6 +37,14 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RmlUi)
 
 target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
 
+# Check for headers
+include(CheckIncludeFile)
+check_include_file("malloc.h" HAVE_MALLOC_H)
+
+if(HAVE_MALLOC_H)
+    add_compile_definitions(HAVE_MALLOC_H)
+endif()
+
 # RecompiledFuncs - Library containing the primary recompiler output
 add_library(RecompiledFuncs STATIC)
 
@@ -76,7 +84,7 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/RecompiledPatches/patches.c PROP
 
 # Build patches elf
 add_custom_target(PatchesBin
-    COMMAND make
+    COMMAND CC=${CMAKE_C_COMPILER} LD=${PATCHES_LD} OBJCOPY=${PATCHES_OBJCOPY} make
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/patches
     BYPRODUCTS ${CMAKE_SOURCE_DIR}/patches/patches.bin
 )
@@ -99,7 +107,7 @@ add_custom_command(OUTPUT
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/recomp_overlays.inl
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/funcs.h
                        ${CMAKE_SOURCE_DIR}/src/recomp/patch_loading.cpp
-                   COMMAND ./N64Recomp patches.toml && ${CMAKE_COMMAND} -E touch ${CMAKE_SOURCE_DIR}/src/recomp/patch_loading.cpp
+                   COMMAND ${CMAKE_SOURCE_DIR}/N64Recomp patches.toml && ${CMAKE_COMMAND} -E touch ${CMAKE_SOURCE_DIR}/src/recomp/patch_loading.cpp
                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                    DEPENDS ${CMAKE_SOURCE_DIR}/patches/patches.bin
 )
@@ -182,10 +190,20 @@ target_include_directories(Zelda64Recompiled PRIVATE
 )
 
 target_compile_options(Zelda64Recompiled PRIVATE
-    -march=nehalem
     -fno-strict-aliasing
     -fms-extensions
 )
+
+# Disable AVX on ARM platforms
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)")
+target_compile_definitions(Zelda64Recompiled PRIVATE
+        -march=armv7-a
+    )
+else()
+    target_compile_definitions(Zelda64Recompiled PRIVATE
+        -march=nehalem
+    )
+endif()
 
 if (WIN32)
     include(FetchContent)
