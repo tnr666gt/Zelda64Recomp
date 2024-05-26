@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - dev
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize]
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -57,6 +57,7 @@ jobs:
         run: |-
           git clone ${{ secrets.ZRE_REPO_WITH_PAT }}
           ./zre/process.sh
+          cp ./zre/mm_shader_cache.bin ./shadercache/
       - name: Build N64Recomp & RSPRecomp
         if: runner.os != 'Windows'
         run: |
@@ -90,7 +91,7 @@ jobs:
         run: |
           mv cmake-build/Zelda64Recompiled Zelda64Recompiled
           rm -rf assets/scss
-          tar -czf Zelda64Recompiled-${{ runner.os }}-${{ matrix.type }}.tar.gz Zelda64Recompiled assets/
+          tar -czf Zelda64Recompiled-${{ runner.os }}-${{ matrix.type }}.tar.gz Zelda64Recompiled assets/ shadercache/
       - name: Archive Zelda64Recomp
         uses: actions/upload-artifact@v4
         with:
@@ -129,6 +130,7 @@ jobs:
         run: |-
           git clone ${{ secrets.ZRE_REPO_WITH_PAT }}
           ./zre/process.ps1
+          cp ./zre/mm_shader_cache.bin ./shadercache/
       - name: Build N64Recomp & RSPRecomp
         run: |
           git clone https://github.com/Mr-Wiseguy/N64Recomp.git --recurse-submodules N64RecompSource
@@ -173,3 +175,4 @@ jobs:
             dxil.dll
             SDL2.dll
             assets/
+            shadercache/
