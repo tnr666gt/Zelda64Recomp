@@ -24,6 +24,7 @@ constexpr auto api_default            = ultramodern::GraphicsApi::Auto;
 constexpr auto ar_default             = RT64::UserConfiguration::AspectRatio::Expand;
 constexpr auto msaa_default           = RT64::UserConfiguration::Antialiasing::MSAA2X;
 constexpr auto rr_default             = RT64::UserConfiguration::RefreshRate::Display;
+constexpr auto hpfb_default           = ultramodern::HighPrecisionFramebuffer::Auto;
 constexpr int ds_default              = 1;
 constexpr int rr_manual_default       = 60;
 constexpr bool developer_mode_default = false;
@@ -93,6 +94,7 @@ namespace ultramodern {
             {"ar_option",       config.ar_option},
             {"msaa_option",     config.msaa_option},
             {"rr_option",       config.rr_option},
+            {"hpfb_option",     config.hpfb_option},
             {"rr_manual_value", config.rr_manual_value},
             {"developer_mode",  config.developer_mode},
         };
@@ -107,6 +109,7 @@ namespace ultramodern {
         config.ar_option        = from_or_default(j, "ar_option",       ar_default);
         config.msaa_option      = from_or_default(j, "msaa_option",     msaa_default);
         config.rr_option        = from_or_default(j, "rr_option",       rr_default);
+        config.hpfb_option      = from_or_default(j, "hpfb_option",     hpfb_default);
         config.rr_manual_value  = from_or_default(j, "rr_manual_value", rr_manual_default);
         config.developer_mode   = from_or_default(j, "developer_mode",  developer_mode_default);
     }
@@ -160,7 +163,11 @@ void save_general_config(const std::filesystem::path& path) {
     config_json["rumble_strength"] = recomp::get_rumble_strength();
     config_json["gyro_sensitivity"] = recomp::get_gyro_sensitivity();
     config_json["mouse_sensitivity"] = recomp::get_mouse_sensitivity();
+    config_json["joystick_deadzone"] = recomp::get_joystick_deadzone();
     config_json["autosave_mode"] = recomp::get_autosave_mode();
+    config_json["camera_invert_mode"] = recomp::get_camera_invert_mode();
+    config_json["analog_cam_mode"] = recomp::get_analog_cam_mode();
+    config_json["analog_camera_invert_mode"] = recomp::get_analog_camera_invert_mode();
     config_json["debug_mode"] = recomp::get_debug_mode_enabled();
     config_file << std::setw(4) << config_json;
 }
@@ -171,7 +178,11 @@ void set_general_settings_from_json(const nlohmann::json& config_json) {
     recomp::set_rumble_strength(from_or_default(config_json, "rumble_strength", 25));
     recomp::set_gyro_sensitivity(from_or_default(config_json, "gyro_sensitivity", 50));
     recomp::set_mouse_sensitivity(from_or_default(config_json, "mouse_sensitivity", is_steam_deck ? 50 : 0));
+    recomp::set_joystick_deadzone(from_or_default(config_json, "joystick_deadzone", 5));
     recomp::set_autosave_mode(from_or_default(config_json, "autosave_mode", recomp::AutosaveMode::On));
+    recomp::set_camera_invert_mode(from_or_default(config_json, "camera_invert_mode", recomp::CameraInvertMode::InvertY));
+    recomp::set_analog_cam_mode(from_or_default(config_json, "analog_cam_mode", recomp::AnalogCamMode::Off));
+    recomp::set_analog_camera_invert_mode(from_or_default(config_json, "analog_camera_invert_mode", recomp::CameraInvertMode::InvertNone));
     recomp::set_debug_mode_enabled(from_or_default(config_json, "debug_mode", false));
 }
 
@@ -221,6 +232,7 @@ void assign_all_mappings(recomp::InputDevice device, const recomp::DefaultN64Map
     assign_mapping_complete(device, recomp::GameInput::X_AXIS_POS, values.analog_right);
     assign_mapping_complete(device, recomp::GameInput::Y_AXIS_NEG, values.analog_down);
     assign_mapping_complete(device, recomp::GameInput::Y_AXIS_POS, values.analog_up);
+    assign_mapping_complete(device, recomp::GameInput::TOGGLE_MENU, values.toggle_menu);
 };
 
 void recomp::reset_input_bindings() {
@@ -245,6 +257,7 @@ void reset_graphics_options() {
     new_config.ar_option = ar_default;
     new_config.msaa_option = msaa_default;
     new_config.rr_option = rr_default;
+    new_config.hpfb_option = hpfb_default;
     new_config.rr_manual_value = rr_manual_default;
     new_config.developer_mode = developer_mode_default;
     ultramodern::set_graphics_config(new_config);
@@ -311,6 +324,16 @@ bool load_input_device_from_json(const nlohmann::json& config_json, recomp::Inpu
         // Check if the json object for the given input exists and that it's an array.
         auto find_input_it = mappings_json.find(input_name);
         if (find_input_it == mappings_json.end() || !find_input_it->is_array()) {
+            assign_mapping(
+                device,
+                cur_input,
+                recomp::get_default_mapping_for_input(
+                    device == recomp::InputDevice::Keyboard ?
+                        recomp::default_n64_keyboard_mappings :
+                        recomp::default_n64_controller_mappings,
+                    cur_input
+                )
+            );
             continue;
         }
         const nlohmann::json& input_json = *find_input_it;
@@ -344,6 +367,7 @@ void load_controls_config(const std::filesystem::path& path) {
 void save_sound_config(const std::filesystem::path& path) {
     nlohmann::json config_json{};
 
+    config_json["main_volume"] = recomp::get_main_volume();
     config_json["bgm_volume"] = recomp::get_bgm_volume();
     config_json["low_health_beeps"] = recomp::get_low_health_beeps_enabled();
     
@@ -357,8 +381,8 @@ void load_sound_config(const std::filesystem::path& path) {
 
     config_file >> config_json;
 
-    
     recomp::reset_sound_settings();
+    call_if_key_exists(recomp::set_main_volume, config_json, "main_volume");
     call_if_key_exists(recomp::set_bgm_volume, config_json, "bgm_volume");
     call_if_key_exists(recomp::set_low_health_beeps_enabled, config_json, "low_health_beeps");
 }
